@@ -15,30 +15,61 @@ const accountSlice = createSlice({
     //looks like we are mutating the state directly but not really(Immer js makes it immutable behind the scenes)
     deposit(state, action) {
       state.balance = state.balance + action.payload;
+      state.isLoading = false
     },
     withdraw(state, action) {
       state.balance -= action.payload;
     },
-    requestLoan(state, action) {
-      if (state.loan > 0) return;
+    //by default automatically created action creators only accept one single argument so you have to 'prepare them'
+    requestLoan: {
+      prepare(amount, purpose) {
+        return {
+          payload: { amount, purpose },
+        };
+      },
 
-      state.balance += action.payload.amount;
-      state.loan = action.payload.amount;
-      state.loanPurpose = action.payload.purpose;
+      reducer(state, action) {
+        if (state.loan > 0) return;
+
+        state.balance += action.payload.amount;
+        state.loan = action.payload.amount;
+        state.loanPurpose = action.payload.purpose;
+      },
     },
-    payLoan(state, action) {
+    payLoan(state) {
+      state.balance -= state.loan;
       state.loan = 0;
       state.loanPurpose = "";
-      state.balance -= state.loan;
+    },
+    convertingCurrency(state) {
+      state.isLoading = true;
     },
   },
 });
 
-//action creators?
-export const {deposit, withdraw, requestLoan, payLoan} = accountSlice.actions
+//remember to export this
 
-console.log(accountSlice)
-export default accountSlice.reducer
+//action creators?
+export const { withdraw, requestLoan, payLoan } = accountSlice.actions;
+
+//must follow the convection
+export function deposit(amount, currency) {
+  if (currency === "USD") return { type: "account/deposit", payload: amount };
+
+  return async function (dispatch, getState) {
+    dispatch({ type: "account/convertingCurrency" });
+    //const host = 'api.frankfurter.app';
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?amount=${amount}&from=${currency}&to=USD`
+    );
+    const data = await res.json();
+
+    const convertedAmount = data.rates.USD;
+    //console.log(getState);
+    dispatch({ type: "account/deposit", payload: convertedAmount });
+  };
+}
+export default accountSlice.reducer;
 
 // export default function accountReducer(state = initialStateAccount, action) {
 //   switch (action.type) {
